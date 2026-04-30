@@ -8,7 +8,7 @@ services:
     volumes:
       - radar_data:/app/data
     ports:
-      - "7888:7888"
+      - "7888:8000"
 
   frontend:
     build: ./frontend
