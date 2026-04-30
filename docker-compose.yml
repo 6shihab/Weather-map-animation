@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: radar-backend
+    restart: unless-stopped
+    volumes:
+      - radar_data:/app/data
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: radar-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    volumes:
+      # Mount the same volume to nginx so it can serve raw images directly via alias
+      - radar_data:/app/data:ro
+
+volumes:
+  radar_data:
