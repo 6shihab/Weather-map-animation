@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, FastForward, Activity } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Activity, Maximize, Minimize } from 'lucide-react';
 
 export default function MapAnimator() {
   const [images, setImages] = useState([]);
@@ -8,9 +8,10 @@ export default function MapAnimator() {
   const [playbackSpeed, setPlaybackSpeed] = useState(300); // ms per frame
   const [isLoading, setIsLoading] = useState(true);
   const [loadedImages, setLoadedImages] = useState(new Set());
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const timerRef = useRef(null);
-  const imageRefs = useRef([]);
+  const containerRef = useRef(null);
 
   // Fetch image list from backend
   const fetchImages = async () => {
@@ -22,7 +23,6 @@ export default function MapAnimator() {
         const latestImages = data.images.slice(-600);
         
         setImages(prev => {
-          // Check if there are new images
           if (prev.length !== latestImages.length || prev[prev.length - 1] !== latestImages[latestImages.length - 1]) {
             return latestImages;
           }
@@ -37,7 +37,6 @@ export default function MapAnimator() {
   // Initial fetch and polling
   useEffect(() => {
     fetchImages();
-    // Poll every 1 minute
     const interval = setInterval(fetchImages, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -48,9 +47,8 @@ export default function MapAnimator() {
 
     let loadedCount = 0;
     const newLoaded = new Set(loadedImages);
-    let initialLoadThreshold = Math.min(10, images.length); // Start playing after 10 images load or total if less
+    let initialLoadThreshold = Math.min(10, images.length); 
     
-    // We want to start loading from the newest or oldest? Usually oldest to newest for animation.
     images.forEach((imgFilename, index) => {
       if (newLoaded.has(index)) {
         loadedCount++;
@@ -68,15 +66,12 @@ export default function MapAnimator() {
         loadedCount++;
         if (loadedCount >= initialLoadThreshold && isLoading) {
           setIsLoading(false);
-          // If we just loaded enough to start, start from the latest or oldest? 
-          // Let's start from 0 if it was completely empty
         }
       };
       img.onerror = () => {
-        // Skip on error
         setLoadedImages(prev => {
           const updated = new Set(prev);
-          updated.add(index); // Mark as processed to not block
+          updated.add(index); 
           return updated;
         });
       };
@@ -96,7 +91,6 @@ export default function MapAnimator() {
       if (next >= images.length) {
         return 0; // Loop back
       }
-      // Skip unloaded frames
       while (next < images.length && !loadedImages.has(next)) {
         next++;
       }
@@ -120,35 +114,50 @@ export default function MapAnimator() {
     setIsPlaying(false);
     setCurrentIndex(parseInt(e.target.value, 10));
   };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
   
   const formatTimeFromFilename = (filename) => {
-    if (!filename) return "";
-    // mtr_YYYYMMDD_HHMMSS.jpg
+    if (!filename) return "--:--";
     const match = filename.match(/mtr_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
     if (match) {
       const [_, year, month, day, hr, min, sec] = match;
       return `${hr}:${min}`;
     }
-    return "";
+    return "--:--";
   };
 
   const formatDateFromFilename = (filename) => {
-    if (!filename) return "";
+    if (!filename) return "----/--/--";
     const match = filename.match(/mtr_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
     if (match) {
       const [_, year, month, day] = match;
       return `${year}-${month}-${day}`;
     }
-    return "";
+    return "----/--/--";
   };
 
   return (
-    <div className="w-full h-full flex flex-col gap-6 relative">
+    <div ref={containerRef} className="w-full h-full relative group">
       
-      {/* Main Map Viewer Area */}
-      <div className="relative flex-grow w-full rounded-3xl overflow-hidden glass-panel border border-slate-700/50 shadow-2xl group transition-all duration-500 hover:shadow-cyan-500/10">
-        
-        {/* Loading State */}
+      {/* Radar Image Fullscreen Background */}
+      <div className="absolute inset-0 z-0 flex items-center justify-center bg-slate-950/80 overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md">
             <Activity className="w-12 h-12 text-cyan-400 animate-pulse mb-4" />
@@ -156,58 +165,59 @@ export default function MapAnimator() {
           </div>
         )}
         
-        {/* Radar Images container */}
-        <div className="absolute inset-0 bg-slate-950/50 flex items-center justify-center">
-           {images.length > 0 ? (
-             <img 
-               src={`/api/images/raw/${images[currentIndex]}`} 
-               alt="Radar" 
-               className="w-full h-full object-contain filter drop-shadow-2xl transition-opacity duration-75"
-               style={{ opacity: loadedImages.has(currentIndex) ? 1 : 0.5 }}
-             />
-           ) : (
-             <div className="text-slate-500 flex flex-col items-center">
-               <svg className="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-               </svg>
-               <p>Waiting for incoming radar telemetry...</p>
-             </div>
-           )}
-        </div>
-
-        {/* Floating Info Badge overlay */}
-        <div className="absolute top-6 right-6 z-10">
-          <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-end shadow-xl border border-white/5 transition-transform hover:scale-105 duration-300">
-            <span className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-cyan-200 tracking-tighter drop-shadow-md">
-              {formatTimeFromFilename(images[currentIndex]) || "--:--"}
-            </span>
-            <span className="text-xs font-semibold text-cyan-400 tracking-widest uppercase mt-1">
-              {formatDateFromFilename(images[currentIndex]) || "----/--/--"}
-            </span>
-            <div className="mt-2 text-[10px] text-slate-400 flex items-center gap-1">
-              FRAME: {images.length > 0 ? currentIndex + 1 : 0} / {images.length}
-            </div>
+        {images.length > 0 ? (
+          <img 
+            src={`/api/images/raw/${images[currentIndex]}`} 
+            alt="Radar" 
+            className="w-full h-full object-contain filter drop-shadow-2xl transition-opacity duration-75"
+            style={{ opacity: loadedImages.has(currentIndex) ? 1 : 0.5 }}
+          />
+        ) : (
+          <div className="text-slate-500 flex flex-col items-center z-10">
+            <svg className="w-20 h-20 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p className="tracking-widest uppercase text-sm">Waiting for incoming telemetry...</p>
           </div>
+        )}
+      </div>
+
+      {/* Floating Info Badge overlay (Top Right) */}
+      <div className="absolute top-6 right-6 z-30 pointer-events-auto">
+        <div className="glass-panel px-5 py-3 rounded-2xl flex flex-col items-end shadow-xl border border-white/10 transition-all duration-300">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[10px] font-bold text-emerald-400 tracking-widest uppercase">Live</span>
+          </div>
+          <span className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-br from-white to-cyan-200 tracking-tighter drop-shadow-lg">
+            {formatTimeFromFilename(images[currentIndex])}
+          </span>
+          <span className="text-xs font-semibold text-cyan-400 tracking-widest uppercase mt-1">
+            {formatDateFromFilename(images[currentIndex])}
+          </span>
         </div>
       </div>
 
-      {/* Control Deck */}
-      <div className="glass-panel rounded-3xl p-6 w-full max-w-4xl mx-auto flex flex-col gap-6 shadow-2xl relative z-20 border-t border-white/10">
+      {/* Floating Control Deck (Bottom Center) */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[95%] max-w-4xl z-30 glass-panel rounded-3xl p-5 md:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 transition-transform duration-500 translate-y-0 opacity-100 group-hover:translate-y-0 group-hover:opacity-100">
         
         {/* Timeline Slider */}
-        <div className="w-full relative group">
+        <div className="w-full relative mb-6">
           <input 
             type="range" 
             min="0" 
             max={Math.max(0, images.length - 1)} 
             value={images.length > 0 ? currentIndex : 0} 
             onChange={handleSliderChange}
-            className="w-full z-10 relative"
+            className="w-full z-10 relative cursor-pointer"
             disabled={images.length === 0}
           />
           {/* Progress fill visual */}
           <div 
-            className="absolute top-[6px] left-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full pointer-events-none transition-all duration-100"
+            className="absolute top-[6px] left-0 h-1 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full pointer-events-none transition-all duration-100"
             style={{ width: `${images.length > 1 ? (currentIndex / (images.length - 1)) * 100 : 0}%` }}
           />
         </div>
@@ -216,7 +226,7 @@ export default function MapAnimator() {
         <div className="flex items-center justify-between">
           
           {/* Speed Controls */}
-          <div className="flex items-center gap-2 bg-slate-800/50 rounded-xl p-1 border border-slate-700/50">
+          <div className="flex items-center gap-1 md:gap-2 bg-slate-900/50 rounded-xl p-1 border border-slate-700/50">
             {[
               { label: '0.5x', value: 600 },
               { label: '1x', value: 300 },
@@ -234,25 +244,25 @@ export default function MapAnimator() {
           </div>
 
           {/* Main Playback Controls */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-5">
              <button 
                 onClick={() => {
                   setIsPlaying(false);
                   setCurrentIndex(prev => Math.max(0, prev - 1));
                 }}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700 hover:border-slate-600 hover:text-white"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all border border-slate-600 hover:border-slate-500 hover:text-white"
              >
-               <SkipBack className="w-5 h-5" fill="currentColor" />
+               <SkipBack className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" />
              </button>
 
              <button 
                 onClick={togglePlay}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 border-2 ${isPlaying ? 'bg-cyan-500 border-cyan-400 text-slate-900 glow-active' : 'bg-slate-800 border-slate-600 text-white hover:bg-slate-700'}`}
+                className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all duration-300 border-2 shadow-lg ${isPlaying ? 'bg-cyan-500 border-cyan-400 text-slate-900 glow-active' : 'bg-slate-800 border-slate-500 text-white hover:bg-slate-700'}`}
              >
                {isPlaying ? (
-                 <Pause className="w-6 h-6" fill="currentColor" />
+                 <Pause className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" />
                ) : (
-                 <Play className="w-6 h-6 ml-1" fill="currentColor" />
+                 <Play className="w-5 h-5 md:w-6 md:h-6 ml-1" fill="currentColor" />
                )}
              </button>
 
@@ -261,18 +271,24 @@ export default function MapAnimator() {
                   setIsPlaying(false);
                   setCurrentIndex(prev => Math.min(images.length - 1, prev + 1));
                 }}
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700 hover:border-slate-600 hover:text-white"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all border border-slate-600 hover:border-slate-500 hover:text-white"
              >
-               <SkipForward className="w-5 h-5" fill="currentColor" />
+               <SkipForward className="w-4 h-4 md:w-5 md:h-5" fill="currentColor" />
              </button>
           </div>
 
-          {/* Right spacer for centering */}
-          <div className="w-[140px] flex justify-end">
-             <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                {images.length} FRAMES
+          {/* Action Buttons (Right) */}
+          <div className="flex items-center gap-4">
+             <div className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                FRAME: {images.length > 0 ? currentIndex + 1 : 0} <span className="text-slate-600">/</span> {images.length}
              </div>
+             <button
+               onClick={toggleFullscreen}
+               className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-all border border-slate-600 hover:border-cyan-500 hover:text-cyan-400"
+               title="Toggle Fullscreen"
+             >
+               {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+             </button>
           </div>
 
         </div>
