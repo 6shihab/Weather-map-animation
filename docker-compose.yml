@@ -4,7 +4,7 @@ services:
   backend:
     build: ./backend
     container_name: radar-backend
-    restart: unless-stopped
+    restart: always
     volumes:
       - radar_data:/app/data
     ports:
@@ -13,7 +13,7 @@ services:
   frontend:
     build: ./frontend
     container_name: radar-frontend
-    restart: unless-stopped
+    restart: always
     ports:
       - "7887:80"
     depends_on:
