@@ -8,14 +8,14 @@ services:
     volumes:
       - radar_data:/app/data
     ports:
-      - "8000:8000"
+      - "7888:7888"
 
   frontend:
     build: ./frontend
     container_name: radar-frontend
     restart: unless-stopped
     ports:
-      - "7888:80"
+      - "80:80"
     depends_on:
       - backend
     volumes:
