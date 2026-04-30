@@ -55,8 +55,9 @@ export default function MapAnimator() {
         return;
       }
       
+      const filename = typeof imgFilename === 'string' ? imgFilename : imgFilename.filename;
       const img = new Image();
-      img.src = `/api/images/raw/${imgFilename}`;
+      img.src = `/api/images/raw/${filename}`;
       img.onload = () => {
         setLoadedImages(prev => {
           const updated = new Set(prev);
@@ -133,7 +134,13 @@ export default function MapAnimator() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
   
-  const formatTimeFromFilename = (filename) => {
+  const getFilename = (item) => {
+    if (!item) return "";
+    return typeof item === 'string' ? item : item.filename;
+  };
+
+  const formatTimeFromFilename = (item) => {
+    const filename = getFilename(item);
     if (!filename) return "--:--";
     const match = filename.match(/mtr_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
     if (match) {
@@ -143,7 +150,8 @@ export default function MapAnimator() {
     return "--:--";
   };
 
-  const formatDateFromFilename = (filename) => {
+  const formatDateFromFilename = (item) => {
+    const filename = getFilename(item);
     if (!filename) return "----/--/--";
     const match = filename.match(/mtr_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
     if (match) {
@@ -167,7 +175,7 @@ export default function MapAnimator() {
         
         {images.length > 0 ? (
           <img 
-            src={`/api/images/raw/${images[currentIndex]}`} 
+            src={`/api/images/raw/${getFilename(images[currentIndex])}`} 
             alt="Radar" 
             className="w-full h-full object-contain filter drop-shadow-2xl transition-opacity duration-75"
             style={{ opacity: loadedImages.has(currentIndex) ? 1 : 0.5 }}
